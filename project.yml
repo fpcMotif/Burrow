@@ -1,0 +1,54 @@
+name: Burrow
+options:
+  bundleIdPrefix: dev.burrow
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+    SWIFT_UPCOMING_FEATURE_BARE_SLASH_REGEX: YES
+    SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    GENERATE_INFOPLIST_FILE: YES
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  Burrow:
+    type: application
+    platform: macOS
+    sources:
+      - path: Burrow
+    resources:
+      - Burrow/Resources/Assets.xcassets
+    entitlements:
+      path: Burrow/Resources/Burrow.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.temporary-exception.files.absolute-path.read-only:
+          - /Library/Caches/
+        com.apple.security.application-groups:
+          - dev.burrow.shared
+    info:
+      properties:
+        CFBundleDisplayName: Burrow
+        LSMinimumSystemVersion: "15.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: "© 2026"
+    dependencies:
+      - target: BurrowHelper
+
+  BurrowHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - path: BurrowHelper
+    settings:
+      base:
+        SKIP_INSTALL: NO
+        INSTALL_PATH: $(LOCAL_LIBRARY_DIR)/LaunchDaemons
