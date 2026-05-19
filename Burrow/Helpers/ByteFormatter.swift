@@ -1,16 +1,11 @@
 import Foundation
 
 enum ByteFormatter {
-    /// Use the system file-size formatter so the output matches Finder
-    /// exactly (decimal units, "Zero KB" suppressed).
+    /// Matches Finder's display (decimal units, e.g. "1.2 MB"). The
+    /// `.byteCount` format style is a `Sendable` value type — unlike
+    /// `ByteCountFormatter`, which would need a `@MainActor` shared
+    /// instance to satisfy Swift 6 strict concurrency.
     static func string(_ bytes: Int64) -> String {
-        formatter.string(fromByteCount: bytes)
+        bytes.formatted(.byteCount(style: .file))
     }
-
-    private static let formatter: ByteCountFormatter = {
-        let f = ByteCountFormatter()
-        f.countStyle = .file
-        f.allowsNonnumericFormatting = false
-        return f
-    }()
 }

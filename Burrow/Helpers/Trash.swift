@@ -1,24 +1,21 @@
 import AppKit
 import Foundation
 
-/// Thin wrapper around `NSWorkspace.recycle` that returns when *all*
-/// items have been moved to Trash (or failed). Reversible by design.
+/// Thin wrapper around `NSWorkspace.recycle`. One batch call → one
+/// Finder undo entry, fewer Mach IPC round-trips. Reversible by design.
+///
+/// `NSWorkspace.recycle(_:)` reports a single error per call rather than
+/// per-URL; callers only need to know which URLs *didn't* land in the
+/// Trash, so we return that list.
 enum Trash {
     @discardableResult
-    static func send(_ urls: [URL]) async -> [URL: any Error] {
-        await withCheckedContinuation { continuation in
-            var failures: [URL: any Error] = [:]
-            let group = DispatchGroup()
-            for url in urls {
-                group.enter()
-                NSWorkspace.shared.recycle([url]) { _, error in
-                    if let error { failures[url] = error }
-                    group.leave()
-                }
-            }
-            group.notify(queue: .global()) {
-                continuation.resume(returning: failures)
-            }
+    static func send(_ urls: [URL]) async -> [URL] {
+        guard !urls.isEmpty else { return [] }
+        do {
+            let trashed = try await NSWorkspace.shared.recycle(urls)
+            return urls.filter { trashed[$0] == nil }
+        } catch {
+            return urls
         }
     }
 }

@@ -37,17 +37,17 @@ struct DashboardView: View {
 
     private var breakdown: some View {
         Chart {
-            ForEach(slices, id: \.id) { slice in
+            ForEach(slices) { slice in
                 SectorMark(
                     angle: .value("Size", slice.bytes),
                     innerRadius: .ratio(0.62),
                     angularInset: 1.5
                 )
                 .cornerRadius(4)
-                .foregroundStyle(slice.color)
+                .foregroundStyle(slice.category.tint)
                 .annotation(position: .overlay) {
                     if slice.bytes > model.reclaimable / 20 {
-                        Text(slice.title)
+                        Text(slice.category.title)
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(.white)
                     }
@@ -58,6 +58,8 @@ struct DashboardView: View {
     }
 
     private var actions: some View {
+        // The `⇧⌘K` shortcut lives on the menu command (BurrowApp); this
+        // button reuses the same action without re-binding the shortcut.
         HStack(spacing: 12) {
             Button {
                 Task { await model.startSmartClean() }
@@ -67,7 +69,6 @@ struct DashboardView: View {
             }
             .controlSize(.large)
             .buttonStyle(.borderedProminent)
-            .keyboardShortcut("k", modifiers: [.command, .shift])
 
             Button {
                 Task { await model.rescanAll() }
@@ -99,31 +100,16 @@ struct DashboardView: View {
 
     private struct Slice: Identifiable {
         let id: ScannerID
-        let title: String
+        let category: ScanCategory
         let bytes: Int64
-        let color: Color
     }
 
     private var slices: [Slice] {
-        model.findings.compactMap { (id, items) -> Slice? in
-            let bytes = items.reduce(0) { $0 + $1.size }
+        Scanners.all.compactMap { scanner -> Slice? in
+            let bytes = model.bytesByScanner[scanner.id] ?? 0
             guard bytes > 0 else { return nil }
-            return Slice(
-                id: id,
-                title: id.rawValue,
-                bytes: bytes,
-                color: color(for: id)
-            )
+            return Slice(id: scanner.id, category: scanner.category, bytes: bytes)
         }
         .sorted { $0.bytes > $1.bytes }
-    }
-
-    private func color(for id: ScannerID) -> Color {
-        switch id.rawValue {
-        case "system.junk": .blue
-        case "dev.junk":    .orange
-        case "large.files": .purple
-        default:            .gray
-        }
     }
 }

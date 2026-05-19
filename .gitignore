@@ -54,5 +54,10 @@ fastlane/test_output
 *.swo
 *~
 
+# Nix / direnv
+.direnv/
+result
+result-*
+
 # Misc
 *.log

@@ -26,37 +26,36 @@ struct FSWalker: Sendable {
         self.prune = prune
     }
 
-    /// Async stream of entries in BFS order. Bounded queue; producer
-    /// suspends if the consumer falls behind, so memory stays flat.
+    /// Async stream of entries in BFS order. Unbounded — buffering-oldest
+    /// would silently drop entries from the start of the walk, which is
+    /// data loss for a scanner.
     func entries() -> AsyncThrowingStream<Entry, any Error> {
-        AsyncThrowingStream(bufferingPolicy: .bufferingOldest(8192)) { continuation in
-            let task = Task.detached(priority: .utility) {
-                do {
-                    try await self.walk(continuation: continuation)
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
+        detachedStream { continuation in
+            // `walk` is synchronous because `FileManager.DirectoryEnumerator`
+            // is not `Sendable` — under Swift 6 strict concurrency it can't
+            // cross an `await`. Keeping the loop inside one non-async call
+            // avoids that. The continuation is Sendable, so yields are fine.
+            try self.walk(continuation: continuation)
         }
     }
 
     // MARK: - private
 
-    private func walk(continuation: AsyncThrowingStream<Entry, any Error>.Continuation) async throws {
-        // Simple recursive walk using FileManager for correctness in this
-        // skeleton. Replaced with getattrlistbulk in production — see
-        // `FSWalkerBulk.swift` (TODO). The protocol is identical.
-        let keys: [URLResourceKey] = [
-            .fileSizeKey,
-            .totalFileAllocatedSizeKey,
-            .contentModificationDateKey,
-            .isDirectoryKey,
-        ]
+    /// Reused across every entry — building this `Set` inside the loop
+    /// would allocate once per file (millions, for a full $HOME).
+    private static let keys: Set<URLResourceKey> = [
+        .fileSizeKey,
+        .totalFileAllocatedSizeKey,
+        .contentModificationDateKey,
+        .isDirectoryKey,
+    ]
+
+    private func walk(continuation: AsyncThrowingStream<Entry, any Error>.Continuation) throws {
+        // FileManager-based skeleton; the `getattrlistbulk` rewrite lives
+        // behind `FSWalkerBulk.swift` (TODO) and shares this signature.
         guard let enumerator = FileManager.default.enumerator(
             at: root,
-            includingPropertiesForKeys: keys,
+            includingPropertiesForKeys: Array(Self.keys),
             options: [.skipsHiddenFiles, .skipsPackageDescendants],
             errorHandler: { _, _ in true }
         ) else { return }
@@ -67,15 +66,18 @@ struct FSWalker: Sendable {
                 enumerator.skipDescendants()
                 continue
             }
-            let values = try url.resourceValues(forKeys: Set(keys))
+            // `try?` so a single TCC denial or unreadable file doesn't kill
+            // the whole walk — there's always at least one on a real $HOME.
+            guard let values = try? url.resourceValues(forKeys: Self.keys) else {
+                continue
+            }
             let size = Int64(values.totalFileAllocatedSize ?? values.fileSize ?? 0)
-            let entry = Entry(
+            continuation.yield(Entry(
                 url: url,
                 size: size,
                 modified: values.contentModificationDate ?? .distantPast,
                 isDirectory: values.isDirectory ?? false
-            )
-            continuation.yield(entry)
+            ))
         }
     }
 }

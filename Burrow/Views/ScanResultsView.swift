@@ -7,60 +7,62 @@ struct ScanResultsView: View {
     @State private var selection = Set<ScanItem.ID>()
     @State private var previewURL: URL?
     @State private var sortOrder = [KeyPathComparator(\ScanItem.size, order: .reverse)]
+    @State private var sortedItems: [ScanItem] = []
+    @State private var totalBytes: Int64 = 0
 
-    private var items: [ScanItem] {
-        (model.findings[scannerID] ?? []).sorted(using: sortOrder)
+    private var category: ScanCategory? {
+        Scanners.scanner(for: scannerID)?.category
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            Table(items, selection: $selection, sortOrder: $sortOrder) {
-                TableColumn("Path", value: \.url.path) { item in
-                    Label(item.url.lastPathComponent, systemImage: icon(for: item))
-                        .help(item.url.path())
-                }
-                TableColumn("Size", value: \.size) { item in
-                    Text(ByteFormatter.string(item.size))
-                        .monospacedDigit()
-                }
-                .width(min: 80, ideal: 100)
-                TableColumn("Modified", value: \.modified) { item in
-                    Text(item.modified, style: .relative)
-                        .foregroundStyle(.secondary)
-                }
-                .width(min: 120, ideal: 140)
-                TableColumn("Safety") { item in
-                    confidenceBadge(item.confidence)
-                }
-                .width(80)
+        Table(sortedItems, selection: $selection, sortOrder: $sortOrder) {
+            TableColumn("Path", value: \.url.path) { item in
+                Label(item.url.lastPathComponent, systemImage: item.kind.symbol)
+                    .help(item.url.path())
             }
-            .contextMenu(forSelectionType: ScanItem.ID.self) { ids in
-                Button("Reveal in Finder") { reveal(ids) }
-                Button("Quick Look") { previewURL = ids.first }
-                Divider()
-                Button("Move to Trash", role: .destructive) { trash(ids) }
-            } primaryAction: { ids in
-                previewURL = ids.first
+            TableColumn("Size", value: \.size) { item in
+                Text(ByteFormatter.string(item.size))
+                    .monospacedDigit()
             }
-            .quickLookPreview($previewURL)
+            .width(min: 80, ideal: 100)
+            TableColumn("Modified", value: \.modified) { item in
+                Text(item.modified, style: .relative)
+                    .foregroundStyle(.secondary)
+            }
+            .width(min: 120, ideal: 140)
+            TableColumn("Safety") { item in
+                confidenceBadge(item.confidence)
+            }
+            .width(80)
         }
-        .navigationTitle(scannerID.rawValue)
+        .contextMenu(forSelectionType: ScanItem.ID.self) { ids in
+            Button("Reveal in Finder") { reveal(ids) }
+            Button("Quick Look") { previewURL = ids.first }
+            Divider()
+            Button("Move to Trash", role: .destructive) { trash(ids) }
+        } primaryAction: { ids in
+            previewURL = ids.first
+        }
+        .quickLookPreview($previewURL)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            header
+                .background(.background)
+                .overlay(alignment: .bottom) { Divider() }
+        }
+        .navigationTitle(category?.title ?? "Results")
         .toolbar { toolbar }
+        .task(id: model.findingsVersion) { resort() }
+        .onChange(of: sortOrder) { _, _ in resort() }
     }
 
     private var header: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("\(items.count) items")
-                    .font(.headline)
-                Text(ByteFormatter.string(items.reduce(0) { $0 + $1.size }))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            Spacer()
+        VStack(alignment: .leading) {
+            Text("\(sortedItems.count) items").font(.headline)
+            Text(ByteFormatter.string(totalBytes))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
         .padding(.vertical, 12)
     }
@@ -69,11 +71,11 @@ struct ScanResultsView: View {
     private var toolbar: some ToolbarContent {
         ToolbarItem {
             Button {
-                trash(selection.isEmpty ? Set(items.map(\.id)) : selection)
+                trash(selection.isEmpty ? Set(sortedItems.map(\.id)) : selection)
             } label: {
                 Label("Trash Selected", systemImage: "trash")
             }
-            .disabled(items.isEmpty)
+            .disabled(sortedItems.isEmpty)
         }
     }
 
@@ -91,26 +93,19 @@ struct ScanResultsView: View {
             .foregroundStyle(color)
     }
 
-    private func icon(for item: ScanItem) -> String {
-        switch item.kind {
-        case .cache:          "shippingbox"
-        case .log:            "doc.text"
-        case .devArtifact:    "hammer"
-        case .appLeftover:    "app"
-        case .largeFile:      "doc.zipper"
-        case .duplicate:      "doc.on.doc"
-        case .backup:         "externaldrive"
-        case .browserData:    "safari"
-        }
+    private func resort() {
+        let items = model.findings[scannerID] ?? []
+        sortedItems = items.sorted(using: sortOrder)
+        totalBytes = items.totalBytes
     }
 
     private func reveal(_ ids: Set<ScanItem.ID>) {
-        let urls = items.filter { ids.contains($0.id) }.map(\.url)
+        let urls = sortedItems.filter { ids.contains($0.id) }.map(\.url)
         NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
     private func trash(_ ids: Set<ScanItem.ID>) {
-        let urls = items.filter { ids.contains($0.id) }.map(\.url)
+        let urls = sortedItems.filter { ids.contains($0.id) }.map(\.url)
         Task { await Trash.send(urls) }
     }
 }

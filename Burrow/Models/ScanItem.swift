@@ -33,3 +33,40 @@ struct ScanItem: Hashable, Identifiable, Sendable {
         case risky
     }
 }
+
+extension ScanItem.Kind {
+    /// Single source of truth for the kind→category mapping; views use
+    /// this instead of maintaining a parallel switch.
+    var category: ScanCategory {
+        switch self {
+        case .cache:       .systemJunk
+        case .log:         .systemJunk
+        case .devArtifact: .devJunk
+        case .largeFile:   .largeFiles
+        case .appLeftover: .appLeftovers
+        case .duplicate:   .duplicates
+        case .backup:      .backups
+        case .browserData: .browserData
+        }
+    }
+
+    /// SF Symbol per kind. Falls back to the category's symbol so adding
+    /// a new `Kind` case doesn't require a new icon up-front.
+    var symbol: String {
+        switch self {
+        case .cache:       "shippingbox"
+        case .log:         "doc.text"
+        case .devArtifact: "hammer"
+        case .appLeftover: "app"
+        case .largeFile:   "doc.zipper"
+        case .duplicate:   "doc.on.doc"
+        case .backup:      "externaldrive"
+        case .browserData: "safari"
+        }
+    }
+}
+
+extension Sequence where Element == ScanItem {
+    /// Cheap aggregate used by the dashboard, sidebar, and result views.
+    var totalBytes: Int64 { reduce(0) { $0 + $1.size } }
+}

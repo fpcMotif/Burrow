@@ -3,40 +3,30 @@ import Foundation
 /// User-space caches and log archives. Safe to wipe — apps regenerate
 /// them on next launch.
 struct SystemJunkScanner: Scanning {
-    let id = ScannerID("system.junk")
     let category: ScanCategory = .systemJunk
 
     func scan() -> AsyncThrowingStream<ScanItem, any Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task.detached(priority: .utility) {
-                let roots = Self.roots()
-                await withTaskGroup(of: Void.self) { group in
-                    for root in roots {
-                        group.addTask {
-                            let walker = FSWalker(root: root)
-                            do {
-                                for try await entry in walker.entries() where !entry.isDirectory {
-                                    let item = ScanItem(
-                                        url: entry.url,
-                                        size: entry.size,
-                                        modified: entry.modified,
-                                        kind: .cache,
-                                        recoverable: true,
-                                        confidence: .safe
-                                    )
-                                    continuation.yield(item)
-                                }
-                            } catch is CancellationError {
-                                return
-                            } catch {
-                                // Tolerate per-root errors (TCC denials etc.)
-                            }
-                        }
+        detachedStream { continuation in
+            for root in Self.roots() {
+                let walker = FSWalker(root: root)
+                do {
+                    for try await entry in walker.entries() where !entry.isDirectory {
+                        continuation.yield(ScanItem(
+                            url: entry.url,
+                            size: entry.size,
+                            modified: entry.modified,
+                            kind: .cache,
+                            recoverable: true,
+                            confidence: .safe
+                        ))
                     }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // Tolerate per-root errors (TCC denials etc.) and move on
+                    // to the next root rather than failing the whole scan.
                 }
-                continuation.finish()
             }
-            continuation.onTermination = { _ in task.cancel() }
         }
     }
 

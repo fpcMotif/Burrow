@@ -18,48 +18,70 @@ final class AppModel {
     var route: Route = .dashboard
     var isScanning: Bool = false
 
-    /// Latest scan items per scanner, keyed by id. Replaced atomically when
-    /// a scanner finishes so the UI never sees a torn intermediate state.
+    /// Latest scan items per scanner, keyed by id. Single source of truth
+    /// — the engine never re-buffers the full result set, only batches.
     var findings: [ScannerID: [ScanItem]] = [:]
 
-    /// Total reclaimable bytes across every finished scanner.
-    var reclaimable: Int64 {
-        findings.values.reduce(0) { acc, items in
-            acc + items.reduce(0) { $0 + $1.size }
-        }
-    }
+    /// Per-scanner byte totals, kept in lock-step with `findings` so
+    /// views don't need to fold the items array on every render.
+    private(set) var bytesByScanner: [ScannerID: Int64] = [:]
 
-    private let engine = ScanEngine()
+    /// Total reclaimable bytes across every finished scanner. Maintained
+    /// as the sum of `bytesByScanner` to avoid O(N) folds in views.
+    private(set) var reclaimable: Int64 = 0
+
+    /// Bumped on every `apply(_:)` so views can `.onChange` on it for
+    /// expensive derived state (sorted item lists, treemap layouts).
+    private(set) var findingsVersion: UInt64 = 0
+
+    private var runningScan: Task<Void, Never>?
 
     func rescanAll() async {
-        isScanning = true
-        defer { isScanning = false }
-        for await event in await engine.run(scanners: Scanners.all) {
-            apply(event)
-        }
+        await run(scanners: Scanners.all)
     }
 
     func startSmartClean() async {
-        isScanning = true
         route = .smartClean
-        defer { isScanning = false }
-        for await event in await engine.run(scanners: Scanners.smartClean) {
-            apply(event)
+        await run(scanners: Scanners.smartClean)
+    }
+
+    func cancelScan() {
+        runningScan?.cancel()
+    }
+
+    private func run(scanners: [any Scanning]) async {
+        runningScan?.cancel()
+        isScanning = true
+        let task = Task { @MainActor [weak self] in
+            for await event in ScanEngine.run(scanners: scanners) {
+                guard !Task.isCancelled else { return }
+                self?.apply(event)
+            }
         }
+        runningScan = task
+        await task.value
+        isScanning = false
     }
 
     private func apply(_ event: ScanEvent) {
         switch event {
-        case .started:
-            break
-        case .progress(let id, let items):
-            findings[id, default: []].append(contentsOf: items)
-        case .finished(let id, let items):
-            findings[id] = items
-        case .failed(let id, let error):
+        case .started(let id):
+            reclaimable -= bytesByScanner[id] ?? 0
             findings[id] = []
-            // TODO: surface in UI banner
-            _ = error
+            bytesByScanner[id] = 0
+        case .progress(let id, let items):
+            let batchBytes = items.totalBytes
+            findings[id, default: []].append(contentsOf: items)
+            bytesByScanner[id, default: 0] += batchBytes
+            reclaimable += batchBytes
+        case .finished:
+            break
+        case .failed(let id, _):
+            // TODO: surface in UI banner once `errors: [ScannerID: any Error]` exists.
+            reclaimable -= bytesByScanner[id] ?? 0
+            findings[id] = []
+            bytesByScanner[id] = 0
         }
+        findingsVersion &+= 1
     }
 }

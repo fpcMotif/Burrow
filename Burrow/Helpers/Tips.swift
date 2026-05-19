@@ -4,7 +4,7 @@ import TipKit
 struct SmartCleanTip: Tip {
     var title: Text { Text("One-click cleanup") }
     var message: Text? {
-        Text("Smart Clean removes only items marked Safe. Hold ⇧⌘K from anywhere.")
+        Text("Smart Clean removes only items marked Safe. Hold ⌘⇧K from anywhere.")
     }
     var image: Image? { Image(systemName: "sparkles") }
 }

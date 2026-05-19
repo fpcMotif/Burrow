@@ -19,9 +19,7 @@ struct SmartCleanView: View {
                 .contentTransition(.numericText())
                 .animation(.snappy, value: model.reclaimable)
 
-            Button {
-                Task { await model.startSmartClean() }
-            } label: {
+            Button(action: primaryAction) {
                 Text(model.isScanning ? "Cancel" : "Clean Now")
                     .frame(width: 160)
             }
@@ -33,5 +31,13 @@ struct SmartCleanView: View {
         }
         .frame(maxWidth: .infinity)
         .navigationTitle("Smart Clean")
+    }
+
+    private func primaryAction() {
+        if model.isScanning {
+            model.cancelScan()
+        } else {
+            Task { await model.startSmartClean() }
+        }
     }
 }

@@ -16,8 +16,7 @@ struct RootView: View {
         .onChange(of: sidebarSelection) { _, new in
             if let new { model.route = new }
         }
-        .task(id: model.findings.count) {
-            // Kick off a quick scan on first appearance if nothing yet.
+        .task {
             if model.findings.isEmpty && !model.isScanning {
                 await model.rescanAll()
             }

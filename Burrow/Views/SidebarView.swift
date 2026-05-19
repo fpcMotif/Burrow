@@ -40,8 +40,7 @@ struct SidebarView: View {
     }
 
     private func moduleRow(_ scanner: any Scanning) -> some View {
-        let items = model.findings[scanner.id] ?? []
-        let bytes = items.reduce(Int64(0)) { $0 + $1.size }
+        let bytes = model.bytesByScanner[scanner.id] ?? 0
         return HStack {
             Label(scanner.category.title, systemImage: scanner.category.symbol)
                 .foregroundStyle(scanner.category.tint)

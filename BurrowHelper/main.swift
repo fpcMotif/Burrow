@@ -21,10 +21,7 @@ final class HelperService: NSObject, BurrowHelperProtocol, NSXPCListenerDelegate
         var errors: [String: String] = [:]
         for path in paths {
             let url = URL(fileURLWithPath: path)
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
-               let size = attrs[.size] as? Int64 {
-                reclaimed += size
-            }
+            reclaimed += Self.allocatedSize(of: url)
             do {
                 var dst: NSURL?
                 try FileManager.default.trashItem(at: url, resultingItemURL: &dst)
@@ -33,6 +30,31 @@ final class HelperService: NSObject, BurrowHelperProtocol, NSXPCListenerDelegate
             }
         }
         reply(reclaimed, errors)
+    }
+
+    /// Recursive total. `FileManager.attributesOfItem(.size)` on a
+    /// directory reports the inode size (≈100 bytes), not its contents —
+    /// using `URLResourceValues` walks descendants the same way scanners
+    /// already do.
+    private static func allocatedSize(of url: URL) -> Int64 {
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .totalFileAllocatedSizeKey]
+        guard let values = try? url.resourceValues(forKeys: keys) else { return 0 }
+        if values.isDirectory != true {
+            return Int64(values.totalFileAllocatedSize ?? 0)
+        }
+        var total: Int64 = 0
+        let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.totalFileAllocatedSizeKey],
+            options: [.skipsHiddenFiles]
+        )
+        if let enumerator {
+            for case let item as URL in enumerator {
+                let v = try? item.resourceValues(forKeys: [.totalFileAllocatedSizeKey])
+                total += Int64(v?.totalFileAllocatedSize ?? 0)
+            }
+        }
+        return total
     }
 
     func runMaintenance(tasks: [String], reply: @escaping (Bool, String?) -> Void) {
@@ -45,6 +67,9 @@ final class HelperService: NSObject, BurrowHelperProtocol, NSXPCListenerDelegate
     }
 }
 
+// `NSXPCListener.delegate` is `weak`, so this local binding is the only
+// strong reference keeping the delegate alive for the listener's lifetime.
+// Removing it lets the delegate dealloc before the first connection arrives.
 let delegate = HelperService()
 let listener = NSXPCListener(machServiceName: "dev.burrow.Helper")
 listener.delegate = delegate
