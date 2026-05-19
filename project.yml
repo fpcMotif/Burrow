@@ -34,12 +34,14 @@ targets:
           - /Library/Caches/
         com.apple.security.application-groups:
           - dev.burrow.shared
-    info:
-      properties:
-        CFBundleDisplayName: Burrow
-        LSMinimumSystemVersion: "15.0"
-        LSApplicationCategoryType: public.app-category.utilities
-        NSHumanReadableCopyright: "© 2026"
+        com.apple.developer.service-management.managed-by-main-app:
+          - dev.burrow.Helper
+    settings:
+      base:
+        INFOPLIST_KEY_CFBundleDisplayName: Burrow
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026"
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
     dependencies:
       - target: BurrowHelper
 
