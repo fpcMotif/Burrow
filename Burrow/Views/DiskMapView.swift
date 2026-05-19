@@ -11,7 +11,7 @@ struct DiskMapView: View {
     @State private var hover: ScanItem?
 
     var body: some View {
-        GeometryReader { geo in
+        GeometryReader { _ in
             Canvas { ctx, size in
                 let rects = layout(in: CGRect(origin: .zero, size: size), items: topItems)
                 for (item, rect) in rects {

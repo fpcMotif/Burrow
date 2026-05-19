@@ -81,9 +81,9 @@ struct ScanResultsView: View {
 
     private func confidenceBadge(_ c: ScanItem.Confidence) -> some View {
         let (text, color): (String, Color) = switch c {
-        case .safe:   ("Safe",   .green)
+        case .safe: ("Safe", .green)
         case .review: ("Review", .yellow)
-        case .risky:  ("Risky",  .red)
+        case .risky: ("Risky", .red)
         }
         return Text(text)
             .font(.caption2.weight(.medium))

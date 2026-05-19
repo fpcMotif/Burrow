@@ -1,0 +1,60 @@
+# SwiftLint config tuned for Burrow's Swift 6 / SwiftUI 6 code style.
+# Run locally: `swiftlint lint` (binary comes from flake.nix / brew).
+
+disabled_rules:
+  - trailing_whitespace          # editors handle this, false positives in CI
+  - opening_brace                # K&R style is fine, also fights SwiftUI builders
+  - todo                         # we *want* TODOs to be visible, not warnings
+  - identifier_name              # too noisy for short Swift idioms (`i`, `to`, `id`)
+  - trailing_comma               # keep them — they make adds/reorders one-line diffs
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - first_where
+  - implicit_return
+  - last_where
+  - prefer_self_type_over_type_of_self
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - vertical_whitespace_closing_braces
+
+analyzer_rules:
+  - unused_import
+
+excluded:
+  - .build
+  - DerivedData
+  - Burrow.xcodeproj
+  - .swiftpm
+  - .direnv         # Nix-store symlinks duplicate the source tree
+  - Pods
+  - Carthage
+
+line_length:
+  warning: 120
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+  ignores_function_declarations: true
+
+type_body_length:
+  warning: 400
+  error: 600
+
+file_length:
+  warning: 600
+  error: 1000
+
+function_body_length:
+  warning: 60
+  error: 120
+
+cyclomatic_complexity:
+  warning: 12
+  error: 20
+
+nesting:
+  type_level:
+    warning: 3

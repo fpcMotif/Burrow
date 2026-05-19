@@ -1,5 +1,10 @@
 # Burrow
 
+[![CI](https://github.com/fpcMotif/Burrow/actions/workflows/ci.yml/badge.svg)](https://github.com/fpcMotif/Burrow/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![macOS 15+](https://img.shields.io/badge/macOS-15+-black.svg?logo=apple)](https://www.apple.com/macos)
+[![Swift 6](https://img.shields.io/badge/swift-6.0-orange.svg?logo=swift)](https://swift.org)
+
 A native macOS cleaner. SwiftUI 6, Swift 6 strict concurrency, zero
 telemetry, pay-once. Designed to feel like Apple built it and run like Mole
 wrote it.
